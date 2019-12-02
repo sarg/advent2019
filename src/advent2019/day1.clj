@@ -16,8 +16,7 @@
 ;; individually calculate the fuel needed for the mass of each module (your
 ;; puzzle input), then add together all the fuel values.
 
-(defn fuel-req [mass]
-  (int (- (Math/floor (float (/ mass 3))) 2)))
+(defn fuel-req [mass] (- (quot mass 3) 2))
 
 (assert (= (fuel-req 12) 2))
 (assert (= (fuel-req 14) 2))

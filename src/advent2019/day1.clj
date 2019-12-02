@@ -52,4 +52,15 @@
 ;; fuel? (Calculate the fuel requirements for each module separately, then add
 ;; them all up at the end.)
 
-(defn fuel-req-rec [mass])
+(defn fuel-req-recursive [mass]
+  (loop [total 0
+         mass mass]
+    (let [fuel (fuel-req mass)]
+      (if (<= fuel 0) total
+          (recur (+ total fuel) fuel)))))
+
+(assert (= (fuel-req-recursive 14) 2))
+(assert (= (fuel-req-recursive 1969) 966))
+(assert (= (fuel-req-recursive 100756) 50346))
+
+(reduce #'+ (map fuel-req-recursive data))

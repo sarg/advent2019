@@ -1,4 +1,4 @@
-(ns advent2019
+(ns advent2019.day1
   (:require [clojure.java.io :as io]))
 
 ;; Fuel required to launch a given module is based on its mass. Specifically, to
@@ -25,7 +25,7 @@
 (assert (= (fuel-req 100756) 33583))
 
 (def data
-  (with-open [rdr (io/reader "/home/sarg/devel/advent2019/resources/day1.in")]
+  (with-open [rdr (io/reader (io/resource "day1.in"))]
     (doall (map #(Integer/parseInt %) (line-seq rdr)))))
 
 (reduce #'+ (map fuel-req data))

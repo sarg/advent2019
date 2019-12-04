@@ -54,6 +54,9 @@
 
 (defn adjust-step [x y11 s1 l1])
 
+(defn valid-solution? [v]
+  (and v (not (apply = 0 (first v)))))
+
 (defn between? [x a b]
   (and (>= x (min a b)) (<= x (max a b))))
 
@@ -80,8 +83,8 @@
   (+ (Math/abs y) (Math/abs x)))
 
 (defn solution [line1 line2]
-  (second (sort (map manhattan
-                     (filter identity
+  (first (sort (map manhattan
+                     (filter valid-solution?
                              (intersections
                               (line-segments line1)
                               (line-segments line2)))))))
@@ -121,8 +124,8 @@
   (+ s1 s2))
 
 (defn bonus [line1 line2]
-  (second (sort (map step-metric
-                     (filter identity
+  (first (sort (map step-metric
+                     (filter valid-solution?
                              (intersections
                               (line-segments line1)
                               (line-segments line2)))))))
@@ -150,20 +153,7 @@
     
                  "</svg>"))))
 
-(line-to-svg "tst.svg"
-             line1 line2)
-
-(map step-metric 
-     (filter identity
-             (intersections
-              (line-segments (.split "U7,R6,D4,L3" ","))
-              (line-segments (.split "R8,U5,L5,D3", ",")))))
-
-(map step-metric 
-      (filter identity
-              (intersections
-               (line-segments line1)
-               (line-segments line2))))
+;; (line-to-svg "tst.svg" line1 line2)
 
 (assert
  (= 30 (bonus 

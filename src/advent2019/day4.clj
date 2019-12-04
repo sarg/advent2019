@@ -38,20 +38,22 @@
 ;; An Elf just remembered one more important detail: the two adjacent matching
 ;; digits are not part of a larger group of matching digits.
 
-(defn bonus-pass-matches? [x]
-  (loop [acc (into [] (take 10 (repeat 0)))
+(defn get-doubles [x]
+  (loop [acc (transient {})
          prev-d (rem x 10)
-         x (quot x 10)
-         has-double? false]
-
-    (let [new-acc (assoc acc prev-d (inc (nth acc prev-d)))
-          d (rem x 10)
+         x (quot x 10)]
+    
+    (let [d (rem x 10)
           is-double? (= prev-d d)
-          new-acc (when is-double? (conj! d))]
+          new-acc (if is-double? (assoc! acc prev-d (inc (get acc prev-d 1))) acc)]
       (cond
         (zero? x) (persistent! acc)
         (< prev-d d) nil
-        :default (recur acc d (quot x 10) (or has-double? is-double?))))))
+        :default (recur new-acc d (quot x 10))))))
+
+(defn bonus-pass-matches? [x]
+  (when-let [d (vals (get-doubles x))]
+    (= (apply min d) 2)))
 
 ;; Given this additional criterion, but still ignoring the range rule, the
 ;; following are now true:

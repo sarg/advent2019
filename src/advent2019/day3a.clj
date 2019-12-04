@@ -18,10 +18,10 @@
             \D [0 -1]})
 
 (defn line-to-points [line]
-  (loop [acc (transient {})
+  (loop [acc (atom (transient {}))
          x 0 y 0 l 0
          line line]
-    (if (empty? line) (persistent! acc)
+    (if (empty? line) (persistent! @acc)
         
         (let [dir (first line)
               [dx dy] (get delta (first dir))
@@ -34,20 +34,27 @@
                        (let [next [(+ dx x) (+ dy y)]
                              next-l (or (get acc next) (inc l))]
 
-                         (assoc! acc next next-l)
+                         (swap! acc #(assoc! % next next-l))
                          (conj next next-l)))
 
                      [x y l]))
-              last-point (last points)
-              point-map (apply hash-map (map #(into [] butlast %)))]
+              last-point (last points)]
+          
+          (recur acc
+                 (nth last-point 0) (nth last-point 1) (nth last-point 2)
+                 (drop 1 line))))))
 
-             (recur acc
-                    (nth last-point 0) (nth last-point 1) (nth last-point 2)
-                    (drop 1 line))))))
-
-(def points1 (line-to-points (.split "U7,R6,D4,L3" ",")))
+(def points1 (line-to-points line1))
 (def points2 (line-to-points line2))
+(def intersections (set/intersection (set (keys points1))
+                                     (set (keys points2))))
 
-(set/intersection (set (keys points1))
-                  (set (keys points2)))
+(defn manhattan [[x y]]
+  (+ (Math/abs y) (Math/abs x)))
 
+(first (sort (map manhattan intersections)))
+(first (sort (map (fn [v]
+                    (let [l1 (get points1 v)
+                          l2 (get points2 v)]
+                      (+ l1 l2)))
+                  intersections)))

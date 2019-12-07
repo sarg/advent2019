@@ -89,7 +89,8 @@
        7 (intcode-run
           (assoc code (marg 2)
                  (if (< (at (marg 0)) (at (marg 1))) 1 0))
-          (+ ip 4))
+          (+ ip 4)
+          input output)
        
        ;; Opcode 8 is equals: if the first parameter is equal to the second
        ;; parameter, it stores 1 in the position given by the third parameter.
@@ -97,7 +98,8 @@
        8 (intcode-run
           (assoc code (marg 2)
                  (if (= (at (marg 0)) (at (marg 1))) 1 0))
-          (+ ip 4))))))
+          (+ ip 4)
+          input output)))))
 
 (assert (= (intcode-run [1,0,0,0,99] 0) [[2,0,0,0,99] [] []]))
 (assert (= (intcode-run [2,3,0,3,99] 0) [[2,3,0,6,99] [] []]))

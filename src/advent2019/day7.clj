@@ -29,13 +29,13 @@
          loop-state (transient {:ip ip :input input})]
     
     (let [ip (:ip loop-state)
-          mode-op (nth code ip)
+          mode-op (get code ip)
           op (rem mode-op 100)
           mode-part (quot mode-op 100)
           modes (digits mode-part)
 
-          at #(nth code %)
-          arg #(nth code (+ ip 1 %))
+          at #(get code %)
+          arg #(get code (+ ip 1 %))
           mode #(or (get modes %) 0)
           marg #(case (mode %)
                   0 (arg %)
@@ -72,6 +72,7 @@
                (assoc! code (arg 0) (first input))
                (assoc! loop-state
                        :ip (+ ip 2)
+                       :state 'running
                        :input (drop 1 input)))))
         
         ;; Opcode 4 outputs the value of its only parameter. For example, the

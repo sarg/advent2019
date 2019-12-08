@@ -25,7 +25,7 @@
          has-double? false]
     (let [d (rem x 10)]
       (cond
-        (zero? x) has-double?
+        (< x 10) has-double?
         (< prev-d d) false
         :default (recur d (quot x 10) (or has-double? (= prev-d d)))))))
 

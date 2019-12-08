@@ -19,13 +19,18 @@
 (def width 25)
 (def height 6)
 (def image-layers (layers data width height))
-(def layer-with-fewest-0
-  (first (sort-by (fn [c] (count (filter #(= \0 %) c)))
-                  image-layers)))
 
-(assert (= 2210
-           (* (count (filter #(= \1 %) layer-with-fewest-0))
-              (count (filter #(= \2 %) layer-with-fewest-0)))))
+(defn solution []
+  (let [layer-with-fewest-0-freq
+        (->> image-layers
+             (map frequencies)
+             (sort-by #(get % \0))
+             (first))]
+
+    (* (get layer-with-fewest-0-freq \2)
+       (get layer-with-fewest-0-freq \1))))
+
+(assert (= 2210 (solution)))
 
 ;; The image is rendered by stacking the layers and aligning the pixels with the
 ;; same positions in each layer. The digits indicate the color of the
@@ -38,14 +43,15 @@
 (defn reduce-layers [l1 l2]
   (map #(if (= %1 \2) %2 %1) l1 l2))
 
-(println 
- (->>
-  image-layers
-  (reduce reduce-layers)
-  (partition width)
-  (map #(replace {\0 " "} %))
-  (map #(apply str %))
-  (s/join "\n")))
+(defn bonus []
+  (println 
+   (->>
+    image-layers
+    (reduce reduce-layers)
+    (partition width)
+    (map #(replace {\0 \space} %))
+    (map #(apply str %))
+    (s/join "\n"))))
 
 ;;  11   11  1111  11  1111 
 ;; 1  1 1  1 1    1  1 1    

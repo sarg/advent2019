@@ -8,8 +8,8 @@
 (defn digits [num]
   (loop [acc (transient [])
          num num]
-    (if (zero? num)
-      (persistent! acc)
+    (if (< num 10)
+      (persistent! (conj! acc num))
       (recur (conj! acc (rem num 10)) (quot num 10)))))
 
 (defn intcode-run

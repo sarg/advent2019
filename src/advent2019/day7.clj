@@ -20,106 +20,132 @@
 ;; The first amplifier's input value is 0, and the last amplifier's output leads
 ;; to your ship's thrusters.
  
+(defn intcode-do-opcode [code loop-state]
+  (let [ip (:ip loop-state)
+        mode-op (get code ip)
+        op (rem mode-op 100)
+        mode-part (quot mode-op 100)
+        modes (digits mode-part)
+
+        at #(get code % 0)
+        arg #(get code (+ ip 1 %))
+        mode #(or (get modes %) 0)
+        marg #(case (mode %)
+                0 (arg %)
+                1 (+ ip 1 %)
+                2 (+ (:relbase loop-state) (arg %)))]
+
+    (case op
+      ;; halt - return program
+      99 [code (assoc! loop-state :state 'halt)]
+
+      ;; + 
+      1 [(assoc! code (marg 2)
+                 (+ (at (marg 0)) (at (marg 1))))
+
+         (assoc! loop-state
+                 :ip (+ ip 4))]
+      
+      ;; *
+      2 [(assoc! code (marg 2)
+                 (* (at (marg 0)) (at (marg 1))))
+         (assoc! loop-state
+                 :ip (+ ip 4))]
+      
+      ;; Opcode 3 takes a single integer as input and saves it to the address given by
+      ;; its only parameter. For example, the instruction 3,50 would take an input
+      ;; value and store it at address 50.
+      3 (let [input (:input loop-state)]
+          (if (empty? input)
+            [code
+             (assoc! loop-state :state 'waiting-input)]
+
+            [(assoc! code (marg 0) (first input))
+             (assoc! loop-state
+                     :ip (+ ip 2)
+                     :state 'running
+                     :input (drop 1 input))]))
+      
+      ;; Opcode 4 outputs the value of its only parameter. For example, the
+      ;; instruction 4,50 would output the value at address 50.
+      4 [code
+         (assoc! loop-state
+                 :ip (+ ip 2)
+                 :state 'pause
+                 :output (at (marg 0)))]
+      
+      ;; Opcode 5 is jump-if-true: if the first parameter is non-zero, it sets
+      ;; the instruction pointer to the value from the second parameter.
+      ;; Otherwise, it does nothing.
+      5 [code
+         (assoc! loop-state
+                 :ip (if (zero? (at (marg 0)))
+                       (+ ip 3)
+                       (at (marg 1))))]
+      
+      ;; Opcode 6 is jump-if-false: if the first parameter is zero, it sets the
+      ;; instruction pointer to the value from the second parameter. Otherwise,
+      ;; it does nothing.
+      6 [code
+         (assoc! loop-state
+                 :ip (if (zero? (at (marg 0)))
+                       (at (marg 1))
+                       (+ ip 3)))]
+      
+      ;; Opcode 7 icode-with-state-seqs less than: if the first parameter is less than the second
+      ;; parameter, it stores 1 in the position given by the third parameter.
+      ;; Otherwise, it stores 0.
+      7 [(assoc! code (marg 2)
+                 (if (< (at (marg 0)) (at (marg 1))) 1 0))
+
+         (assoc! loop-state
+                 :ip (+ ip 4))]
+      
+      ;; Opcode 8 is equals: if the first parameter is equal to the second
+      ;; parameter, it stores 1 in the position given by the third parameter.
+      ;; Otherwise, it stores 0.
+      8 [(assoc! code (marg 2)
+                 (if (= (at (marg 0)) (at (marg 1))) 1 0))
+
+         (assoc! loop-state
+                 :ip (+ ip 4))]
+
+      
+      ;; Opcode 9 adjusts the relative base by the value of its only
+      ;; parameter. The relative base increases (or decreases, if the value is
+      ;; negative) by the value of the parameter.
+      9 [code
+
+         (assoc! loop-state
+                 :ip (+ ip 2)
+                 :relbase (+ (:relbase loop-state) (at (marg 0))))])))
+
 (defn intcode-run
-  [code {:keys [ip input output state]
-         :or {ip 0, state 'running, input [], output []}
-         :as all-state}]
+  [code {:keys [ip input output state relbase]
+         :or {ip 0, state 'running, input [], output [], relbase 0}
+         :as all-state} & {:keys [steps doprint]}]
 
   (loop [code (transient code)
-         loop-state (transient {:ip ip :input input})]
-    
-    (let [ip (:ip loop-state)
-          mode-op (get code ip)
-          op (rem mode-op 100)
-          mode-part (quot mode-op 100)
-          modes (digits mode-part)
+         loop-state (transient {:ip ip :input input
+                                :relbase relbase
+                                :state 'running
+                                :step 0})]
 
-          at #(get code %)
-          arg #(get code (+ ip 1 %))
-          mode #(or (get modes %) 0)
-          marg #(case (mode %)
-                  0 (arg %)
-                  1 (+ ip 1 %))]
+    (when doprint
+      (println (into {} (map #(hash-map % (% loop-state)) [:ip :relbase :state]))))
 
-      (case op
-        ;; halt - return program
-        99 [(persistent! code)
-            (conj all-state (persistent! loop-state) {:state 'halt})]
+    (if (not= 'running (:state loop-state))
+      [(persistent! code) (conj all-state (persistent! loop-state))]
 
-        ;; + 
-        1 (recur
-           (assoc! code (arg 2)
-                   (+ (at (marg 0)) (at (marg 1))))
-           (assoc! loop-state
-                   :ip (+ ip 4)))
-        
-        ;; *
-        2 (recur
-           (assoc! code (arg 2)
-                   (* (at (marg 0)) (at (marg 1))))
-           (assoc! loop-state
-                   :ip (+ ip 4)))
-        
-        ;; Opcode 3 takes a single integer as input and saves it to the address given by
-        ;; its only parameter. For example, the instruction 3,50 would take an input
-        ;; value and store it at address 50.
-        3 (let [input (:input loop-state)]
-            (if (empty? input)
-              [(persistent! code)
-               (conj all-state {:ip ip :input [] :state 'waiting-input})]
+      (let [[new-code new-state]
+            (intcode-do-opcode code loop-state)]
+        (recur new-code new-state)))))
 
-              (recur
-               (assoc! code (arg 0) (first input))
-               (assoc! loop-state
-                       :ip (+ ip 2)
-                       :state 'running
-                       :input (drop 1 input)))))
-        
-        ;; Opcode 4 outputs the value of its only parameter. For example, the
-        ;; instruction 4,50 would output the value at address 50.
-        4 (let [out-val (at (arg 0))]
-            [(persistent! code)
-             (conj all-state (persistent! loop-state) {:ip (+ ip 2) :output out-val})])
-        
-        ;; Opcode 5 is jump-if-true: if the first parameter is non-zero, it sets
-        ;; the instruction pointer to the value from the second parameter.
-        ;; Otherwise, it does nothing.
-        5 (recur
-           code
-           (assoc! loop-state
-                   :ip (if (zero? (at (marg 0)))
-                         (+ ip 3)
-                         (at (marg 1)))))
-        
-        ;; Opcode 6 is jump-if-false: if the first parameter is zero, it sets the
-        ;; instruction pointer to the value from the second parameter. Otherwise,
-        ;; it does nothing.
-        6 (recur
-           code
-           (assoc! loop-state
-                   :ip (if (zero? (at (marg 0)))
-                         (at (marg 1))
-                         (+ ip 3))))
-        
-        ;; Opcode 7 icode-with-state-seqs less than: if the first parameter is less than the second
-        ;; parameter, it stores 1 in the position given by the third parameter.
-        ;; Otherwise, it stores 0.
-        7 (recur
-           (assoc! code (marg 2)
-                   (if (< (at (marg 0)) (at (marg 1))) 1 0))
+(defn intcode-run-map [code & args]
+  (apply intcode-run (code-to-map code) args))
 
-           (assoc! loop-state
-                   :ip (+ ip 4)))
-        
-        ;; Opcode 8 is equals: if the first parameter is equal to the second
-        ;; parameter, it stores 1 in the position given by the third parameter.
-        ;; Otherwise, it stores 0.
-        8 (recur
-           (assoc! code (marg 2)
-                   (if (= (at (marg 0)) (at (marg 1))) 1 0))
-
-           (assoc! loop-state
-                   :ip (+ ip 4)))))))
+(defn code-to-map [vec]
+  (into {} (map-indexed (fn [i,v] {i v}) vec)))
 
 (defn intcode-run-chain [code-with-state-seq]
   (map #(apply intcode-run %) code-with-state-seq))
@@ -146,8 +172,11 @@
 (defn boot-with-0 [code-state-vec]
   (update-in code-state-vec [0 1 :input] conj 0))
 
+(defn halt? [code]
+ (= 'halt (get-in code [1 :state])))
+
 (defn all-halt? [code-with-state-seq]
-  (every? #(= 'halt (get-in % [1 :state])) code-with-state-seq))
+  (every? halt? code-with-state-seq))
 
 (defn set-phases [code phases]
   (into [] (map #(vector code {:input [%]}) phases)))

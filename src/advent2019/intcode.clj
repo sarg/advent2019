@@ -10,7 +10,7 @@
 
         at #(get code % 0)
         arg #(get code (+ ip 1 %))
-        mode #(or (get modes %) 0)
+        mode #(get modes % 0)
         marg #(case (mode %)
                 0 (arg %)
                 1 (+ ip 1 %)
@@ -73,7 +73,7 @@
                        (at (marg 1))
                        (+ ip 3)))]
       
-      ;; Opcode 7 icode-with-state-seqs less than: if the first parameter is less than the second
+      ;; Opcode 7 is less than: if the first parameter is less than the second
       ;; parameter, it stores 1 in the position given by the third parameter.
       ;; Otherwise, it stores 0.
       7 [(assoc! code (marg 2)

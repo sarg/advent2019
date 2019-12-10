@@ -1,5 +1,6 @@
 (ns advent2019.day10
   (:require [clojure.java.io :as io]
+            [clojure.math.combinatorics :as cmb]
             [clojure.math.numeric-tower :refer [gcd]]
             [clojure.set :as s]))
 
@@ -7,19 +8,11 @@
   (with-open [rdr (io/reader (io/resource "day10.in"))]
     (into [] (line-seq rdr))))
 
-(defn s* [[x y] i] [(* x i) (* y i)])
-
 (defn cap [i m]
   (cond
     (< i 0) 0
     (>= i m) (dec m)
     :else i))
-
-(defn s-cap [[x y] w h]
-  [(cap x w) (cap y h)])
-
-(defn s-cap* [c w h i]
-  (s-cap (s* c i) w h))
 
 ;; divide by GCD
 ;; e.g.
@@ -68,18 +61,24 @@
             (recur (inc d)
                    (s/union oa obstructed-angles)))))))
 
-(defn solution [data]
+(defn points [data]
   (let [h (count data)
         w (count (first data))
-        s (* h w)]
-    (loop [i 0 m 0]
-      (if (= i s) m
+        mi (* h w)]
+    (loop [i mi m (transient [])]
+      (if (zero? i) (persistent! m)
           (let [x (mod i w)
                 y (quot i w)
                 ast? (= \# (get-in data [y x]))]
             (if ast? 
-              (recur (inc i) (max m (visible-count data x y w h)))
-              (recur (inc i) m)))))))
+              (recur (dec i) (conj! m [x y (visible-count data x y w h)]))
+              (recur (dec i) m)))))))
+
+(defn solution [data]
+  (->> data
+       (points)
+       (sort-by last)
+       last))
 
 (def tst [".#..#"
           "....."
@@ -87,8 +86,8 @@
           "....#"
           "...##"])
 
-(assert (= 8 (solution tst)))
-(assert (= 309 solution data))
+(assert (= [3 4 8] (solution tst)))
+(assert (= [37 25 309] (solution data)))
 
 (def tst1
   [".#..##.###...#######"
@@ -112,9 +111,60 @@
    "#.#.#.#####.####.###"
    "###.##.####.##.#..##"])
 
-(assert (= 210 (solution tst1)))
+(assert (= [11 13 210] (solution tst1)))
 
 ;; The Elves are placing bets on which will be the 200th asteroid to be
 ;; vaporized. Win the bet by determining which asteroid that will be; what do
 ;; you get if you multiply its X coordinate by 100 and then add its Y
 ;; coordinate? (For example, 8,2 becomes 802.)
+
+(defn radian [[x y]]
+  (let [y (- y)]
+    (->
+     (if (and (>= y 0) (< x 0))
+       (- (* Math/PI 2.5) (Math/atan2 y x))
+       (- (/ Math/PI 2) (Math/atan2 y x)))
+
+     (* 100000)
+     (Math/round))))
+
+(defn with-angle-distance [cx cy [x y]]
+  [(radian (to-angle [cx cy] [x y]))
+   (+ (Math/abs (- x cx)) (Math/abs (- y cy)))
+   x y])
+
+(defn with-angles [data x y]
+  (let [h (count data)
+        w (count (first data))]
+    
+    (->>
+     (cmb/cartesian-product (range w) (range h))
+     (filter (partial not= [x y]))
+     (filter (fn [[x y]] (= \# (get-in data [y x]))))
+
+     (map (partial with-angle-distance x y))
+     (sort))))
+
+(defn laser-ordered [data x y]
+  (let [an (with-angles data x y)
+        total (count an)
+        grouped-angles (group-by first an)
+        all-angles (sort (keys grouped-angles))]
+
+    (loop [i 0 acc []]
+      (if (= (count acc) total) acc
+        (recur (inc i)
+               (->>
+                all-angles
+                (map #(get-in grouped-angles [% i]))
+                (filter identity)
+                (concat acc)))))))
+
+(defn bonus [data x y n]
+  (let [o (laser-ordered data x y)
+        [_ _ xx yy] (nth o (dec n))]
+
+    (+ yy (* 100 xx))))
+
+(assert (= 802 (bonus tst1 11 13 200)))
+(assert (= 416 (bonus data 37 25 200)))

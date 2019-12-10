@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.math.combinatorics :as cmb]
             [clojure.math.numeric-tower :refer [gcd]]
+            [criterium.core :refer [bench with-progress-reporting quick-bench]]
             [clojure.set :as s]))
 
 (def data
@@ -74,6 +75,31 @@
               (recur (dec i) (conj! m [x y (visible-count data x y w h)]))
               (recur (dec i) m)))))))
 
+;; actually no need to go in expanding rectangle
+;; just make a set of GCD-vectors for all asteroids but current
+;; size of this set is the number of visible asteroids
+(defn solution-1 [data]
+  (let [all-asteroids
+        (into [] (apply concat (map-indexed
+                                (fn [y row]
+                                  (keep-indexed
+                                   (fn [x v] (when (= v \#) [x y]))
+                                   row))
+                                data)))]
+
+    (->> all-asteroids
+         (map (fn [me]
+                (conj me
+                      (->> all-asteroids
+                           (filter (partial not= me))
+                           (map (partial to-angle me))
+                           (set)
+                           (count)))))
+
+         (sort-by last)
+         last)))
+
+
 (defn solution [data]
   (->> data
        (points)
@@ -88,6 +114,9 @@
 
 (assert (= [3 4 8] (solution tst)))
 (assert (= [37 25 309] (solution data)))
+
+(assert (= [3 4 8] (solution-1 tst)))
+(assert (= [37 25 309] (solution-1 data)))
 
 (def tst1
   [".#..##.###...#######"

@@ -125,7 +125,7 @@
        (- (* Math/PI 2.5) (Math/atan2 y x))
        (- (/ Math/PI 2) (Math/atan2 y x)))
 
-     (* 100000)
+     (* 10000)
      (Math/round))))
 
 (defn with-angle-distance [cx cy [x y]]

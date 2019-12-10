@@ -18,8 +18,6 @@
    ["D" "I"]
    ["E" "J"]
    ["J" "K"]
-   ["K" "YOU"]
-   ["I" "SAN"]
    ["K" "L"]])
 
 (defn adj-graph [vs]
@@ -68,7 +66,7 @@
             p2-list (get acc p2 [])]
 
         (recur (drop 1 vs)
-               (conj! acc {p2 (conj p2-list p1)}))))))
+               (assoc! acc p2 (conj p2-list p1)))))))
 
 (defn reachable [graph from]
   (loop [acc (transient {})
@@ -91,5 +89,5 @@
 
     (first (sort (map #(+ -2 (get you %) (get san %)) common)))))
 
-(assert (= 4 (bonus test-data)))
+(assert (= 4 (bonus (concat test-data [["K" "YOU"] ["I" "SAN"]]))))
 (assert (= 418 (bonus data)))

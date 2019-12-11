@@ -1,6 +1,7 @@
 (ns advent2019.day11
   (:require [clojure.java.io :as io]
-            [advent2019.intcode :refer [intcode-run halt?]]))
+            [clojure.string :as s]
+            [advent2019.intcode :refer [intcode-run halt? code-to-map]]))
 
 (def data
   (with-open [rdr (io/reader (io/resource "day11.in"))]
@@ -35,14 +36,13 @@
     2 [x (inc y)]
     3 [(dec x) y]))
 
-(defn solution [data]
-  (loop [grid (transient {})
+(defn solution [data init]
+  (loop [grid (transient {[0 0] init})
          code data
          code-state {} 
          me [0 0]
-         dir 0
-         i 0]
-
+         dir 0]
+    
     (let [color-run
           ;; first run with color under robot as input
           (intcode-run code (assoc code-state :input [(get grid me 0)]))
@@ -57,21 +57,41 @@
 
           ;; and it'll be 0 for left and 1 for right
           turn
-          (-> (get-in turn-run [1 :output])
-              (zero?)
-              (if -1 1))
+          (get-in turn-run [1 :output])
 
           new-dir
-          (mod (+ dir turn) 4)]
+          (-> (if (zero? turn) -1 1)
+              (+ dir)
+              (mod 4))]
 
-      (if (halt? turn-run) ;; (> i 5)
-        (persistent! grid)
+      (if (halt? turn-run)
+          (persistent! grid)
       
-        (recur (assoc! grid me color)
-               (first turn-run)
-               (last turn-run)
-               (move me new-dir)
-               new-dir
-               (inc i))))))
+          (recur (assoc! grid me color)
+                 (first turn-run)
+                 (last turn-run)
+                 (move me new-dir)
+                 new-dir)))))
 
-(count (solution data))
+(assert (= 1934 (count (solution data 0))))
+
+(defn grid-to-svg [grid file]
+  (with-open [wrt (io/writer file)]
+    (run! #(.write wrt %)
+          (flatten
+           ["<?xml version='1.0' encoding='UTF-8'?>\n"
+            "<!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>\n"
+            "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' "
+            "width='100%' height='100%' viewBox='-100 -100 400 200'>\n"
+
+            (->> grid
+                 (keep (fn [[[x y] c]]
+                         (when (= 1 c)
+                           (str "<circle cx='" (* x 5) "' cy='" (* y 5) "' r='2' stroke='black' />\n")))))
+
+            "</svg>"]))))
+
+(-> data
+    (code-to-map)
+    (solution 1)
+    (grid-to-svg "resources/day11.svg"))

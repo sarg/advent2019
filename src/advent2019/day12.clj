@@ -1,6 +1,7 @@
 (ns advent2019.day12
   (:require [clojure.java.io :as io]
             [clojure.string :as s]
+            [clojure.math.numeric-tower :refer [lcm]]
             [advent2019.intcode :refer [intcode-run halt? code-to-map]]))
 
 
@@ -33,72 +34,109 @@
 ;; Callisto's x velocity changes by -1 (because 3 < 5). However, if the
 ;; positions on a given axis are the same, the velocity on that axis does not
 ;; change for that pair of moons.
-(defn apply-gravity-to-axis [coords]
-  (map (fn [x]
-         (-> (- (count (filter (partial > x) coords)))
-             (+ (count (filter (partial < x) coords)))))
-       coords))
+
+(definline cmpn [a b c d]
+  `(- 0
+      (compare ~a ~b)
+      (compare ~a ~c)
+      (compare ~a ~d)))
+
+(defn apply-gravity [[a b c d] [va vb vc vd]]
+  [(+ va (cmpn a b c d))
+   (+ vb (cmpn b a c d))
+   (+ vc (cmpn c b a d))
+   (+ vd (cmpn d b a c))])
 
 ;; Once all gravity has been applied, apply velocity: simply add the velocity of
 ;; each moon to its own position. For example, if Europa has a position of x=1,
 ;; y=2, z=3 and a velocity of x=-2, y=0,z=3, then its new position would be
 ;; x=-1, y=2, z=6. This process does not modify the velocity of any moon.
 
+(defn vsum [[a b c d] [va vb vc vd]]
+  [(+ a va)
+   (+ b vb)
+   (+ c vc)
+   (+ d vd)])
+
 (defn abs+ [[a b c]]
   (+ (Math/abs a) (Math/abs b) (Math/abs c)))
 
+(defn next-state [[mx my mz vx vy vz]]
+  (let [nvx (apply-gravity mx vx)
+        nvy (apply-gravity my vy)
+        nvz (apply-gravity mz vz)
+
+        nmx (vsum mx nvx)
+        nmy (vsum my nvy)
+        nmz (vsum mz nvz)]
+
+    [nmx nmy nmz nvx nvy nvz]))
+
+(defn init-state [moons]
+  (into [] (concat
+            (map (fn [p] (into [] (map #(nth % p) moons))) (range 3))
+            (repeat 3 (into [] (repeat (count moons) 0))))))
+
 (defn solution [moons n]
-  (let [[mx my mz] (map (fn [p] (into [] (map #(nth % p) moons))) (range 3))
-        [vx vy vz] (repeat 3 (into [] (repeat (count moons) 0)))]
-    
-    (loop [i 0
-           mx mx my my mz mz
-           vx vx vy vy vz vz]
-      
-      (if (= i n)
-        (let [pot-energy
-              (->>
-               (interleave mx my mz)
-               (partition 3)
-               (map abs+))
+  (let [[mx my mz vx vy vz]
+        (nth (iterate next-state (init-state moons)) n)
 
-              kin-energy
-              (->>
-               (interleave vx vy vz)
-               (partition 3)
-               (map abs+))
+        pot-energy
+        (->>
+         (interleave mx my mz)
+         (partition 3)
+         (map abs+))
 
-              total-energy
-              (reduce + (map * pot-energy kin-energy))]
+        kin-energy
+        (->>
+         (interleave vx vy vz)
+         (partition 3)
+         (map abs+))
 
-          total-energy)
+        total-energy
+        (reduce + (map * pot-energy kin-energy))]
 
-        (let [nvx (map + vx (apply-gravity-to-axis mx))
-              nvy (map + vy (apply-gravity-to-axis my))
-              nvz (map + vz (apply-gravity-to-axis mz))
-
-              nmx (map + mx nvx)
-              nmy (map + my nvy)
-              nmz (map + mz nvz)]
-          
-          (do
-            (when nil
-              (println "Step " i)
-              (run!
-               #(println "pos=" (first %) ", vel=" (last %))
-               (map vector
-                    (partition 3 (interleave mx my mz))
-                    (partition 3 (interleave vx vy vz))))
-              (println))
-
-            (recur (inc i) nmx nmy nmz nvx nvy nvz)))))))
+    total-energy))
 
 (assert (= 179 (solution tst 10)))
+(assert (= 9127 (solution data 1000)))
+
+(defn find-cycle [x]
+  (let [v (repeat (count x) 0)
+
+        v1 (apply-gravity x v)
+        x1 (vsum x v1)
+
+        v2 (apply-gravity x1 v1)
+        x2 (vsum x1 v2)]
+    
+    (loop [x1 x1 v1 v1
+           x2 x2 v2 v2
+           i 1]
+
+      (if (and (= x1 x2) (= v1 v2)) i
+          (let [nv1 (apply-gravity x1 v1)
+                nx1 (vsum x1 nv1)
+
+                nv2 (apply-gravity x2 v2)
+                nx2 (vsum x2 nv2)
+
+                nv3 (apply-gravity nx2 nv2)
+                nx3 (vsum nx2 nv3)]
+            (recur nx1 nv1 nx3 nv3 (inc i)))))))
+
+(defn bonus [moons]
+  (reduce lcm
+          [(find-cycle (map #(nth % 0) moons))
+           (find-cycle (map #(nth % 1) moons))
+           (find-cycle (map #(nth % 2) moons))]))
 
 (def tst1
-  [[  -8,  -10,  0 ]
-   [  5,  5,  10 ]
-   [  2,  -7,  3 ]
-   [  9,  -8,  -3 ]])
+  [[ -8,  -10,  0]
+   [ 5,  5,  10]
+   [ 2,  -7,  3]
+   [ 9,  -8,  -3]])
 
-(assert (= 9127 (solution data 1000)))
+(assert (= 2772 (bonus tst)))
+(assert (= 4686774924 (bonus tst1)))
+(assert (= 353620566035124 (bonus data)))

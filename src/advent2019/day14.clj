@@ -30,15 +30,15 @@
   (+ (quot a b)
      (if (pos? (rem a b)) 1 0)))
 
-(defn step [rs [needed leftovers]]
-  (loop [needed needed
-         acc {}
-         acc-left leftovers]
-    (if (empty? needed)
-      [acc acc-left]
+(defn step [rs [bom have]]
+  (loop [bom bom
+         need {}
+         have have]
+    (if (empty? bom)
+      [need have]
 
-      (let [[el need-cnt] (first needed)
-            has-cnt (leftovers el (bigint 0))
+      (let [[el need-cnt] (first bom)
+            has-cnt (have el (bigint 0))
             [recipe-out recipe] (rs el)
 
             real-need (- need-cnt has-cnt)
@@ -47,11 +47,11 @@
             produced (* recipe-cnt recipe-out)
             leftover (- produced real-need)]
 
-        (recur (rest needed)
-               (merge-with + acc (recipe* recipe recipe-cnt))
+        (recur (rest bom)
+               (merge-with + need (recipe* recipe recipe-cnt))
                (if (pos? leftover)
-                 (assoc acc-left el leftover)
-                 (dissoc acc-left el)))))))
+                 (assoc have el leftover)
+                 (dissoc have el)))))))
 
 (defn not-only-ore? [[rs ls]]
   (or (not= 1 (count rs))

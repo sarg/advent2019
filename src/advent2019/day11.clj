@@ -1,6 +1,8 @@
 (ns advent2019.day11
   (:require [clojure.java.io :as io]
             [clojure.string :as s]
+            [quil.core :as q]
+            [quil.middleware :as m]
             [advent2019.intcode :refer [intcode-run halt? code-to-map]]))
 
 (def data
@@ -37,61 +39,80 @@
     3 [(dec x) y]))
 
 (defn solution [data init]
-  (loop [grid (transient {[0 0] init})
-         code data
-         code-state {} 
-         me [0 0]
-         dir 0]
+  (loop [state (init-state data init)]
     
-    (let [color-run
-          ;; first run with color under robot as input
-          (intcode-run code (assoc code-state :input [(get grid me 0)]))
-
-          ;; and get color to paint current panel
-          color
-          (get-in color-run [1 :output])
-
-          ;; then run another time to get direction to turn
-          turn-run
-          (apply intcode-run color-run)
-
-          ;; and it'll be 0 for left and 1 for right
-          turn
-          (get-in turn-run [1 :output])
-
-          new-dir
-          (-> (if (zero? turn) -1 1)
-              (+ dir)
-              (mod 4))]
-
-      (if (halt? turn-run)
-          (persistent! grid)
-      
-          (recur (assoc! grid me color)
-                 (first turn-run)
-                 (last turn-run)
-                 (move me new-dir)
-                 new-dir)))))
+    (if (= 'halt (get-in state [:state :state]))
+      (:grid state)
+      (recur (step state)))))
 
 (assert (= 1934 (count (solution data 0))))
 
-(defn grid-to-svg [grid file]
-  (with-open [wrt (io/writer file)]
-    (run! #(.write wrt %)
-          (flatten
-           ["<?xml version='1.0' encoding='UTF-8'?>\n"
-            "<!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>\n"
-            "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' "
-            "width='100%' height='100%' viewBox='-100 -100 400 200'>\n"
+(defn init-state [data i]
+  {:grid {[0 0] i}
+   :code (code-to-map data)
+   :state {}
+   :me [0 0]
+   :dir 0})
 
-            (->> grid
-                 (keep (fn [[[x y] c]]
-                         (when (= 1 c)
-                           (str "<circle cx='" (* x 5) "' cy='" (* y 5) "' r='2' stroke='black' />\n")))))
+(defn step [{:keys [code state grid me dir halt]}]
+  (when (and halt (= 'halt (:state state)))
+        (q/exit))
 
-            "</svg>"]))))
+  (let [color-run
+        ;; first run with color under robot as input
+        (intcode-run code (assoc state :input [(get grid me 0)]))
 
-(-> data
-    (code-to-map)
-    (solution 1)
-    (grid-to-svg "resources/day11.svg"))
+        ;; and get color to paint current panel
+        color
+        (get-in color-run [1 :output])
+
+        ;; then run another time to get direction to turn
+        turn-run
+        (apply intcode-run color-run)
+
+        ;; and it'll be 0 for counter-clockwise and 1 for clockwise
+        turn
+        (get-in turn-run [1 :output])
+
+        new-dir
+        (-> (if (zero? turn) -1 1)
+            (+ dir)
+            (mod 4))]
+
+    {:grid (assoc grid me color)
+     :code (first turn-run)
+     :state (last turn-run)
+     :me (move me new-dir)
+     :dir new-dir}))
+
+(defn draw [{:keys [grid me]}]
+  (q/background 255)
+  (q/fill 0)
+
+  (doseq [tile grid
+          :let [[[x y] c] tile]
+          :when (= 1 c)]
+
+    (q/ellipse (* x 5) (* y 5) 4 4))
+
+  (let [[x y] me]
+    (q/fill 0 255 0)
+    (q/ellipse (* x 5) (* y 5) 4 4)))
+
+(q/defsketch solution-sketch
+  :size [220 50]
+  :draw (fn [& args]
+          (q/translate 10 10)
+          (apply draw args))
+  :setup (fn [] (q/frame-rate 25) (init-state data 1))
+  :update step
+  :middleware [m/fun-mode])
+
+(q/defsketch bonus-sketch
+  :size [500 500]
+  :draw (fn [& args]
+          (q/translate (/ (q/width) 2) (/ (q/height) 2))
+          (apply draw args))
+  :setup (fn [] (q/frame-rate 100) (init-state data 0))
+  :update step
+  :middleware [m/fun-mode])

@@ -2,11 +2,7 @@
   (:require [clojure.java.io :as io]
             [quil.core :as q]
             [quil.middleware :as m]
-            [clojure.math.combinatorics :as cmb]
-            [clojure.math.numeric-tower :refer [gcd]]
-            [advent2019.intcode :refer [intcode-run halt? code-to-map]]
-            [criterium.core :refer [bench with-progress-reporting quick-bench]]
-            [clojure.set :as s]))
+            [advent2019.intcode :refer [intcode-run halt? code-to-map]]))
 
 (def data
   (with-open [rdr (io/reader (io/resource "day13.in"))]
@@ -45,6 +41,7 @@
    (partition 3)
    (filter #(= 2 (last %)))
    (count)))
+(assert (= 363 solution))
 
 ;; The game didn't run because you didn't put in any quarters. Unfortunately,
 ;; you did not bring any quarters. Memory address 0 represents the number of
@@ -67,32 +64,21 @@
         [[bx by] _] (first (filter #(= 4 (last %)) new-screen))
         [[px py] _] (first (filter #(= 3 (last %)) new-screen))]
 
+    ;; (when (= 'halt (:state state))
+    ;;   (q/exit))
+
     (assoc params
            :code new-code
            :state new-state
            :screen new-screen
-           :input (if (< by by0) (compare bx bx0)
-                      (compare (+ bx -1 (* (compare bx bx0) (- py by)))
-                               px)))))
-
-(defn get-score [state]
-    (get-in state [:screen [-1 0]]))
-
-(loop [state init-state max-score 0 i 0]
-  ;; (when (> 0 max-score) (println max-score))
-  (if ;; (= 'halt (get-in state [:state :state]))
-      (> 1000 max-score)
-    [max-score i]
-    (recur (update-state state) (max max-score (get-score state)) (inc i))))
+           :input (compare bx px))))
 
 (defn draw [{:keys [screen]}]
-  (q/fill 0)
-  (q/rect 0 0 (q/width) (q/height))
+  (q/background 255)
 
-  (q/fill 0 255 0)
   (run! (fn [[[x y] t]]
           (if (= x -1)
-            (q/text (str t) 0 130)
+            (do (q/fill 0) (q/text (str t) 0 130))
             (when (> t 0)
               (case t
                 1 (q/fill 255 255 255)
@@ -117,12 +103,12 @@
 
 (q/defsketch arcade
   :title "Arcade"
-  ;; :rendered :p2d
   :size [210 150]
   :setup setup
   :update update-state
   :middleware [m/fun-mode]
   :draw draw)
+
 ;; The arcade cabinet has a joystick that can move left and right. The software
 ;; reads the position of the joystick with input instructions:
 
@@ -136,3 +122,15 @@
 ;; in the segment display.
 
 ;; Beat the game by breaking all the blocks. What is your score after the last block is broken?
+
+(defn get-score [state]
+    (get-in state [:screen [-1 0]] 0))
+
+(defn bonus []
+  (->> init-state
+       (iterate update-state)
+       (drop-while #(not= 'halt (get-in % [:state :state])))
+       (first)
+       (get-score)))
+
+(assert (= 17159 (bonus)))

@@ -1,16 +1,10 @@
 (ns advent2019.day5
-  (:require [clojure.java.io :as io]))
+  (:require [clojure.java.io :as io]
+            [advent2019.util :refer [digits]]))
 
 (def data
   (with-open [rdr (io/reader (io/resource "day5.in"))]
     (into [] (map #(Integer/parseInt %) (.split (.readLine rdr) ",")))))
-
-(defn digits [num]
-  (loop [acc (transient [])
-         num num]
-    (if (< num 10)
-      (persistent! (conj! acc num))
-      (recur (conj! acc (rem num 10)) (quot num 10)))))
 
 (defn intcode-run
   ([code ip] (intcode-run code ip [] []))

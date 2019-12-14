@@ -8,6 +8,11 @@
                  [criterium "0.4.5"]
                  [quil "2.5.0"]
                  [org.clojure/math.combinatorics "0.1.5"]]
+  :resource-paths ["resources"
+                   "lib/jna.jar"
+                   "lib/jna-platform.jar"
+                   "lib/VideoExport.jar"]
+
   :main ^:skip-aot advent2019.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})

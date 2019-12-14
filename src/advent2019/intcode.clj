@@ -1,5 +1,5 @@
 (ns advent2019.intcode
-  (:require [advent2019.day5 :refer [digits]]))
+  (:require [advent2019.util :refer [digits]]))
 
 (defn intcode-step [code loop-state]
   (let [ip (:ip loop-state)

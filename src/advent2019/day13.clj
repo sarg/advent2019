@@ -55,7 +55,8 @@
    (map (fn [[x y t]] [[x y] t]))
    (into screen)))
 
-(defn update-state [{:keys [code state screen input] :as params}]
+(defn update-state [{:keys [code state screen input videoExport] :as params}]
+
   (let [[[bx0 by0] _] (first (filter #(= 4 (last %)) screen))
 
         [new-code new-state out] (collect-output code (assoc state :input [input]))
@@ -64,16 +65,17 @@
         [[bx by] _] (first (filter #(= 4 (last %)) new-screen))
         [[px py] _] (first (filter #(= 3 (last %)) new-screen))]
 
-    ;; (when (= 'halt (:state state))
-    ;;   (q/exit))
-
     (assoc params
            :code new-code
            :state new-state
            :screen new-screen
-           :input (compare bx px))))
+           :input (compare bx px)
+           :videoExport (when videoExport
+                          (if (not= 'halt (:state state))
+                            videoExport
+                            (do (.endMovide videoExport) nil))))))
 
-(defn draw [{:keys [screen]}]
+(defn draw [{:keys [screen videoExport]}]
   (q/background 255)
 
   (run! (fn [[[x y] t]]
@@ -85,8 +87,14 @@
                 2 (q/fill 100 100 100)
                 3 (q/fill 0 255 255)
                 4 (q/fill 255 0 0))
-              (q/ellipse (* 5 x) (* 5 y) 5 5))))
-        screen))
+
+              (if (= t 4)
+                (q/ellipse (* 5 x) (* 5 y) 5 5)
+                (do (q/rect-mode :center)
+                    (q/rect (* 5 x) (* 5 y) 5 5))))))
+        screen)
+
+  (.saveFrame videoExport))
 
 (def init-state
   (let [with-coin (assoc (code-to-map data) 0 2)
@@ -99,13 +107,16 @@
 
 (defn setup []
   (q/frame-rate 20)
-  init-state)
+  (let [videoExport (com.hamoid.VideoExport. (quil.applet/current-applet) "day13.mp4")]
+    (.startMovie videoExport)
+    (assoc init-state :videoExport videoExport)))
 
 (q/defsketch arcade
   :title "Arcade"
   :size [210 150]
   :setup setup
   :update update-state
+  :on-close (fn [{:keys [videoExport]}] (when videoExport (.endMovie videoExport)))
   :middleware [m/fun-mode]
   :draw draw)
 

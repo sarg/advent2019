@@ -5,6 +5,8 @@
             [quil.middleware :as m]
             [advent2019.intcode :refer [intcode-run halt? code-to-map]]))
 
+(def video "resources/day15.mp4")
+
 (def data
   (with-open [rdr (io/reader (io/resource "day15.in"))]
     (into [] (map #(Long/parseLong %) (.split (.readLine rdr) ",")))))
@@ -12,7 +14,6 @@
 (def init-state
   {:grid {[0 0] 1}
    :me [0 0]
-   :nearest true
    :code data
    :state {}})
 
@@ -64,47 +65,47 @@
         (recur (dec dist) m
                (conj! acc (reverse-dir dir)))))))
 
-(defn draw-test []
-  (q/background 255)
+;; (defn draw-test []
+;;   (q/background 255)
 
-  (q/fill 0)
-  (q/text (str (:i @debug-atom)) 100 100 )
-  (draw @debug-atom)
+;;   (q/fill 0)
+;;   (q/text (str (:i @debug-atom)) 100 100 )
+;;   (draw @debug-atom)
 
-  (q/fill 255 0 0)
-  (doseq [i (:edge @debug-atom)
-          :let [[x y] i]]
-    (q/ellipse (* x 5) (* y 5) 4 4))
+;;   (q/fill 255 0 0)
+;;   (doseq [i (:edge @debug-atom)
+;;           :let [[x y] i]]
+;;     (q/ellipse (* x 5) (* y 5) 4 4))
 
-  (let [[x y] (:me @debug-atom)]
-    (q/fill 0 255 0)
-    (q/ellipse (* x 5) (* y 5) 4 4)))
+;;   (let [[x y] (:me @debug-atom)]
+;;     (q/fill 0 255 0)
+;;     (q/ellipse (* x 5) (* y 5) 4 4)))
 
-(defn debug-step [grid me edge i]
-  (reset! debug-atom
-          {:grid grid
-           :me me
-           :edge edge
-           :i i}))
+;; (defn debug-step [grid me edge i]
+;;   (reset! debug-atom
+;;           {:grid grid
+;;            :me me
+;;            :edge edge
+;;            :i i}))
 
 (defn find-nearest [search-for me grid]
   (loop [edge [me]
          paths {me 0}
          i 1]
 
-    (when (and debug-atom edge)
-      (debug-step grid me edge i)
-      (.redraw test-sketch))
+    ;; (when (and debug-atom edge)
+    ;;   (debug-step grid me edge i)
+    ;;   (.redraw test-sketch))
 
     (if (not edge)
-      [nil nil (- i 2)]
+      {:dist (- i 2)}
 
       (let [around-edge
             (->> edge
                  (map around)
                  (apply concat)
                  (filter (complement paths))
-                 (group-by (partial grid)))
+                 (group-by grid))
 
             unexplored (get around-edge search-for)
             next-edge (get around-edge 1)]
@@ -114,47 +115,70 @@
                 (->> unexplored
                      (sort-by (partial distance me))
                      (first))]
-            [target (reconstruct-path paths i target) (- i 2)])
+            {:target target
+             :path (reconstruct-path paths i target)
+             :dist i})
 
           (recur next-edge
                  (merge-with min paths
                              (into {} (map #(vector % i) next-edge)))
                  (inc i)))))))
 
-(defn select-new-target [{:keys [grid me state]}]
-  (let [[target path] (find-nearest nil me grid)]
-    {:nearest target
-     :state (assoc state :input path)}))
+(defn select-new-target [{:keys [grid me state found]}]
+  (let [{:keys [target path]} (find-nearest nil me grid)]
+    (if target
+      {:nearest target
+       :state (assoc state :input path)}
+      {:oxygen #{(:target found)}
+       :time 0})))
 
-(defn update-state [{:keys [grid me code state found] :as quil-state}]
-  (if-let [dir (first (:input state))]
-    (let [[new-code new-state]
-          (intcode-run code state)
+(defn circulate-oxygen [{:keys [grid oxygen time]}]
+  (let [next-oxygen
+        (->> oxygen
+             (map around)
+             (apply concat)
+             (filter #(= 1 (grid %))))]
+    
+    (if (empty? next-oxygen)
+      {:finished true}
 
-          try-pos (move me dir)
-          status (:output new-state)
+      {:oxygen (into oxygen next-oxygen)
+       :time (inc time)
+       :grid (into grid (map #(vector % 3) next-oxygen))})))
 
-          new-pos (if (zero? status) me try-pos)
-          new-grid (assoc grid try-pos status)]
+(defn update-state [{:keys [grid me code state found oxygen finished] :as quil-state}]
+  (cond
+    finished
+    quil-state
 
-      (assoc quil-state
-             :found (or found
-                        (when (= 2 status)
-                          (count (second (find-nearest 2 [0 0] new-grid)))))
-             :code new-code
-             :state new-state
-             :grid new-grid
-             :me new-pos))
+    oxygen
+    (conj quil-state (circulate-oxygen quil-state))
 
-    (conj quil-state (select-new-target quil-state))))
+    :default
+    (if-let [dir (first (:input state))]
+      (let [[new-code new-state]
+            (intcode-run code state)
 
+            try-pos (move me dir)
+            status (:output new-state)
 
-(defn draw [{:keys [grid me nearest found]}]
+            new-pos (if (zero? status) me try-pos)
+            new-grid (assoc grid try-pos status)]
+
+        (assoc quil-state
+               :found (or found
+                          (when (= 2 status)
+                            (select-keys (find-nearest 2 [0 0] new-grid) [:dist :target])))
+               :code new-code
+               :state new-state
+               :grid new-grid
+               :me new-pos))
+
+      (conj quil-state (select-new-target quil-state)))))
+
+(defn draw [{:keys [grid me nearest found oxygen time videoExport]}]
   (q/background 255)
-
-  (q/with-fill [255 100 100]
-    (q/rect-mode :center)
-    (q/rect 0 0 6 6))
+  (q/rect-mode :center)
 
   (doseq [tile grid
           :let [[[x y] c] tile]]
@@ -162,28 +186,42 @@
       0 (q/ellipse (* x 5) (* y 5) 4 4)
       1 (q/ellipse (* x 5) (* y 5) 1 1)
       2 (q/with-fill [255 100 100]
-          (q/ellipse (* x 5) (* y 5) 5 5))))
-  
-  (when nearest
-    (let [[x y] nearest]
-      (q/with-fill [255 0 0]
-        (q/ellipse (* x 5) (* y 5) 4 4))))
+          (q/ellipse (* x 5) (* y 5) 5 5))
+      3 (q/with-fill [0 0 255]
+          (q/rect (* x 5) (* y 5) 5 5))))
 
   (when found
     (q/with-fill [0]
-      (q/text (str "Distance: " found) -100 120)))
-  
-  (let [[x y] me]
-    (q/with-fill [0 255 0]
-      (q/ellipse (* x 5) (* y 5) 4 4))))
+      (q/text (str "Distance: " (:dist found)) -100 120)))
+
+  (when time
+    (q/with-fill [0]
+      (q/text (str "Time: " time) -100 140)))
+
+  (when-not oxygen
+    (q/with-fill [255 100 100]
+      (q/rect 0 0 6 6))
+
+    (when nearest
+      (let [[x y] nearest]
+        (q/with-fill [255 0 0]
+          (q/ellipse (* x 5) (* y 5) 4 4))))
+
+    (let [[x y] me]
+      (q/with-fill [0 255 0]
+        (q/ellipse (* x 5) (* y 5) 4 4))))
+
+  (when videoExport
+    (.saveFrame videoExport)))
 
 (defn setup []
-  (q/frame-rate 400)
+  (q/frame-rate 30)
   (q/fill 0)
-  ;; (let [videoExport (com.hamoid.VideoExport. (quil.applet/current-applet) "day13.mp4")]
-  ;;   (.startMovie videoExport)
-  ;;   (assoc init-state :videoExport videoExport))
-  init-state)
+  (if video
+    (let [videoExport (com.hamoid.VideoExport. (quil.applet/current-applet) video)]
+      (.startMovie videoExport)
+      (assoc init-state :videoExport videoExport))
+    init-state))
 
 (defn handle-key [state event]
   (update-in state [:state :input]
@@ -199,30 +237,31 @@
 (defn start []
   (q/defsketch maze
     :title "maze"
-    :size [500 500]
+    :size [300 300]
     :setup setup
 
     :update update-state
 
     ;; :update update-state-key
     ;; :key-typed handle-key 
-    ;; :on-close (fn [{:keys [videoExport]}] (when videoExport (.endMovie videoExport)))
+    :on-close (fn [{:keys [videoExport]}] (when videoExport (.endMovie videoExport)))
 
     :middleware [m/fun-mode]
     :draw (fn [& args]
             (q/translate (/ (q/width) 2) (/ (q/height) 2))
             (apply draw args))))
 
-(defn bonus []
+(defn solution []
   (let [full-map
         (->> init-state
+             (update-state)
              (iterate update-state)
-             (drop-while :nearest)
+             (drop-while (complement :oxygen))
              (first)
              (:grid))
 
-        oxygen (first (first (filter #(= 2 (last %)) full-map)))]
+        {oxygen :target oxygen-dist :dist} (find-nearest 2 [0 0] full-map)
+        farthest-dist (:dist (find-nearest 3 oxygen full-map))]
 
-    (last (find-nearest 3 oxygen full-map))))
-
-(assert (= 398 (bonus)))
+    (assert (= 272 oxygen-dist))
+    (assert (= 398 farthest-dist))))

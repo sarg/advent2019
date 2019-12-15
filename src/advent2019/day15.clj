@@ -5,8 +5,6 @@
             [quil.middleware :as m]
             [advent2019.intcode :refer [intcode-run halt? code-to-map]]))
 
-
-
 (def data
   (with-open [rdr (io/reader (io/resource "day15.in"))]
     (into [] (map #(Long/parseLong %) (.split (.readLine rdr) ",")))))
@@ -14,8 +12,10 @@
 (def init-state
   {:grid {[0 0] 1}
    :me [0 0]
+   :nearest true
    :code data
    :state {}})
+
 ;; Intcode program:
 ;; Accept a movement command via an input instruction.
 ;; north (1), south (2), west (3), and east (4).
@@ -49,23 +49,9 @@
 (defn distance [[cx cy] [x y]]
   (+ (Math/abs (- cx x)) (Math/abs (- cy y))))
 
-;; (let [grid
-;;       {[0 0] 1
-       
-;;        [0 -1] 0
-;;        [0 1] 1
-;;        [-1 0] 0
-;;        [1 0] 0} ]
-
-;;   (->> [[0 0]]
-;;        (map around)
-;;        (apply concat)
-;;        (group-by (partial grid))))
-
 (def reverse-dir {1 2, 2 1, 3 4, 4 3})
 
 (defn reconstruct-path [grid dist me]
-  ;; (println grid dist me)
   (loop [dist (dec dist)
          me me
          acc (transient [])]
@@ -78,7 +64,6 @@
         (recur (dec dist) m
                (conj! acc (reverse-dir dir)))))))
 
-(def debug-atom (atom {}))
 (defn draw-test []
   (q/background 255)
 
@@ -95,22 +80,25 @@
     (q/fill 0 255 0)
     (q/ellipse (* x 5) (* y 5) 4 4)))
 
-(defn nearest-unexplored [grid me & [search-for]]
-  ;; (println [grid me])
+(defn debug-step [grid me edge i]
+  (reset! debug-atom
+          {:grid grid
+           :me me
+           :edge edge
+           :i i}))
+
+(defn find-nearest [search-for me grid]
   (loop [edge [me]
          paths {me 0}
          i 1]
 
     (when (and debug-atom edge)
-      (reset! debug-atom
-              {:grid grid
-               :me me
-               :edge edge
-               ;; (concat (:edge @debug-atom []) edge)
-               :i i})
+      (debug-step grid me edge i)
       (.redraw test-sketch))
 
-    (when edge
+    (if (not edge)
+      [nil nil (- i 2)]
+
       (let [around-edge
             (->> edge
                  (map around)
@@ -126,7 +114,7 @@
                 (->> unexplored
                      (sort-by (partial distance me))
                      (first))]
-            [target (reconstruct-path paths i target)])
+            [target (reconstruct-path paths i target) (- i 2)])
 
           (recur next-edge
                  (merge-with min paths
@@ -134,11 +122,9 @@
                  (inc i)))))))
 
 (defn select-new-target [{:keys [grid me state]}]
-  (let [[target path] (nearest-unexplored grid me)
-        new-state 
-        {:nearest target
-         :state (assoc state :input path)}]
-    new-state))
+  (let [[target path] (find-nearest nil me grid)]
+    {:nearest target
+     :state (assoc state :input path)}))
 
 (defn update-state [{:keys [grid me code state found] :as quil-state}]
   (if-let [dir (first (:input state))]
@@ -154,10 +140,7 @@
       (assoc quil-state
              :found (or found
                         (when (= 2 status)
-                          (let [dist (nearest-unexplored new-grid [0 0] 2)]
-                            (println "Found at: " (str try-pos) " Dist: " (count (second dist)))
-                            dist)
-                          ))
+                          (count (second (find-nearest 2 [0 0] new-grid)))))
              :code new-code
              :state new-state
              :grid new-grid
@@ -165,36 +148,13 @@
 
     (conj quil-state (select-new-target quil-state))))
 
-(def err
-  (dissoc
-   (first
-    (drop-while :nearest
-                (iterate update-state (update-state init-state))))
-   :code))
-
-(def debug-atom nil)
-(let [{:keys [grid me]} err]
-  (println "---")
-  (nearest-unexplored grid me))
-
-(defn tet []
-  (->>
-   {:grid {} :code data :state {} :me [0 0]}
-   (iterate update-state)
-   (take 3)
-   (map :state)
-   (run! println))
-  )
 
 (defn draw [{:keys [grid me nearest found]}]
-  (when-not debug-atom
-    (q/background 255))
+  (q/background 255)
 
-  (q/fill 255 100 100)
-  (q/rect-mode :center)
-  (q/rect 0 0 6 6)
-
-  (q/fill 0)
+  (q/with-fill [255 100 100]
+    (q/rect-mode :center)
+    (q/rect 0 0 6 6))
 
   (doseq [tile grid
           :let [[[x y] c] tile]]
@@ -202,42 +162,32 @@
       0 (q/ellipse (* x 5) (* y 5) 4 4)
       1 (q/ellipse (* x 5) (* y 5) 1 1)
       2 (q/with-fill [255 100 100]
-          (q/ellipse (* x 5) (* y 5) 10 10))))
+          (q/ellipse (* x 5) (* y 5) 5 5))))
   
   (when nearest
     (let [[x y] nearest]
-      (q/fill 255 0 0)
-      (q/ellipse (* x 5) (* y 5) 4 4)))
+      (q/with-fill [255 0 0]
+        (q/ellipse (* x 5) (* y 5) 4 4))))
 
   (when found
     (q/with-fill [0]
-      (q/text (str found) -100 100)))
+      (q/text (str "Distance: " found) -100 120)))
   
   (let [[x y] me]
-    (q/fill 0 255 0)
-    (q/ellipse (* x 5) (* y 5) 4 4)))
-
-
+    (q/with-fill [0 255 0]
+      (q/ellipse (* x 5) (* y 5) 4 4))))
 
 (defn setup []
-  (q/frame-rate 100)
+  (q/frame-rate 400)
+  (q/fill 0)
   ;; (let [videoExport (com.hamoid.VideoExport. (quil.applet/current-applet) "day13.mp4")]
   ;;   (.startMovie videoExport)
   ;;   (assoc init-state :videoExport videoExport))
   init-state)
 
-(defn look-around [dir]
-  (case dir
-    1 [3 4 4 3]
-    2 [3 4 4 3]
-
-    3 [1 2 2 1]
-    4 [1 2 2 1]))
-
 (defn handle-key [state event]
   (update-in state [:state :input]
           (fn [input]
-            (println input)
             ;; 1 n, 2 s, 3 w, 4 e
             (if-let [dir (case (:raw-key event) \k 1 \j 2 \h 3 \l 4 nil)]
               (if input (conj input dir) [dir])))))
@@ -246,31 +196,33 @@
   (if (empty? (:input state)) state
     (update-state state)))
 
-(q/defsketch arcade
-  :title "Arcade"
-  :size [500 500]
-  :setup setup
-
-  :update update-state
-
-  ;; :update update-state-key
-  ;; :key-typed handle-key 
-  ;; :on-close (fn [{:keys [videoExport]}] (when videoExport (.endMovie videoExport)))
-
-  :middleware [m/fun-mode]
-  :draw (fn [& args]
-          (q/translate (/ (q/width) 2) (/ (q/height) 2))
-          (apply draw args)))
-
-
-
-(when debug-atom
-  (q/defsketch test-sketch
+(defn start []
+  (q/defsketch maze
+    :title "maze"
     :size [500 500]
-    :features [:keep-on-top]
-    ;; :setup (fn [] (q/frame-rate 10))
-    :setup (fn [] (q/no-loop))
+    :setup setup
 
+    :update update-state
+
+    ;; :update update-state-key
+    ;; :key-typed handle-key 
+    ;; :on-close (fn [{:keys [videoExport]}] (when videoExport (.endMovie videoExport)))
+
+    :middleware [m/fun-mode]
     :draw (fn [& args]
             (q/translate (/ (q/width) 2) (/ (q/height) 2))
-            (apply draw-test args))))
+            (apply draw args))))
+
+(defn bonus []
+  (let [full-map
+        (->> init-state
+             (iterate update-state)
+             (drop-while :nearest)
+             (first)
+             (:grid))
+
+        oxygen (first (first (filter #(= 2 (last %)) full-map)))]
+
+    (last (find-nearest 3 oxygen full-map))))
+
+(assert (= 398 (bonus)))

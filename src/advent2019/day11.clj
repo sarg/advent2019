@@ -38,15 +38,6 @@
     2 [x (inc y)]
     3 [(dec x) y]))
 
-(defn solution [data init]
-  (loop [state (init-state data init)]
-    
-    (if (= 'halt (get-in state [:state :state]))
-      (:grid state)
-      (recur (step state)))))
-
-(assert (= 1934 (count (solution data 0))))
-
 (defn init-state [data i]
   {:grid {[0 0] i}
    :code (code-to-map data)
@@ -85,6 +76,15 @@
      :me (move me new-dir)
      :dir new-dir}))
 
+(defn solution [data init]
+  (loop [state (init-state data init)]
+    
+    (if (= 'halt (get-in state [:state :state]))
+      (:grid state)
+      (recur (step state)))))
+
+(assert (= 1934 (count (solution data 0))))
+
 (defn draw [{:keys [grid me]}]
   (q/background 255)
   (q/fill 0)
@@ -99,20 +99,22 @@
     (q/fill 0 255 0)
     (q/ellipse (* x 5) (* y 5) 4 4)))
 
-(q/defsketch solution-sketch
-  :size [220 50]
-  :draw (fn [& args]
-          (q/translate 10 10)
-          (apply draw args))
-  :setup (fn [] (q/frame-rate 25) (init-state data 1))
-  :update step
-  :middleware [m/fun-mode])
+(defn part1-animation []
+  (q/defsketch solution-sketch
+    :size [220 50]
+    :draw (fn [& args]
+            (q/translate 10 10)
+            (apply draw args))
+    :setup (fn [] (q/frame-rate 25) (init-state data 1))
+    :update step
+    :middleware [m/fun-mode]))
 
-(q/defsketch bonus-sketch
-  :size [500 500]
-  :draw (fn [& args]
-          (q/translate (/ (q/width) 2) (/ (q/height) 2))
-          (apply draw args))
-  :setup (fn [] (q/frame-rate 100) (init-state data 0))
-  :update step
-  :middleware [m/fun-mode])
+(defn part2-animation []
+  (q/defsketch bonus-sketch
+    :size [500 500]
+    :draw (fn [& args]
+            (q/translate (/ (q/width) 2) (/ (q/height) 2))
+            (apply draw args))
+    :setup (fn [] (q/frame-rate 100) (init-state data 0))
+    :update step
+    :middleware [m/fun-mode]))

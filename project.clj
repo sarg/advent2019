@@ -6,6 +6,7 @@
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [criterium "0.4.5"]
+                 [org.flatland/ordered "1.5.7"]
                  [quil "2.5.0"]
                  [org.clojure/math.combinatorics "0.1.5"]]
   :resource-paths ["resources"

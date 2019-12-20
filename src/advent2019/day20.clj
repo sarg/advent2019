@@ -11,6 +11,9 @@
   (with-open [rdr (io/reader (io/resource "day20.in"))]
     (into [] (line-seq rdr))))
 
+(def width (apply max-key identity (map count data)))
+(def height (count data))
+
 (defn row-to-entries [y row]
   (->> row
        (keep-indexed (fn [x el] (when-not (#{\# \space} el) [[x y] el])))
@@ -19,15 +22,14 @@
 (def level
   (apply hash-map (apply concat (map-indexed row-to-entries data))))
 
-(defn move [[x y] dir]
+(defn move [[x y :as in] dir]
   ;; 1 n, 2 s, 3 w, 4 e
   (case dir
-    1 [x (dec y)]
-    2 [x (inc y)]
+    1 (assoc in 0 x 1 (dec y))
+    2 (assoc in 0 x 1 (inc y))
 
-    3 [(dec x) y]
-    4 [(inc x) y]))
-
+    3 (assoc in 0 (dec x) 1 y)
+    4 (assoc in 0 (inc x) 1 y)))
 
 (defn find-around [me pred]
   (->> (range 1 5)
@@ -46,7 +48,7 @@
   (let [[dot _] (find-around pos #(= \. %))
         l2 (find-around pos #(not= \. %))]
 
-    (when (and dot l2) [dot (get-label l1 l2)])))
+        (when (and dot l2) [dot (get-label l1 l2)])))
 
 (def portals
   (->>
@@ -57,7 +59,7 @@
    (map (fn [[k vs]] [k (into [] (map first vs))]))
    (into {})))
 
-(def level-without-portals
+(def level-without-labels
   (filter (comp (partial = \.) second) level))
 
 (def level-with-portals 
@@ -65,24 +67,21 @@
    portals
    (map (fn [[k vl]] (map #(vector % k) vl)))
    (apply concat)
-   (concat level-without-portals)
+   (concat level-without-labels)
    (into {})))
 
 (defn jump [tname me]
-  (into (filter (partial not= me) (portals tname))))
+  (first (filter (partial not= me) (portals tname))))
 
-(defn around-or-jump [[me v]]
+(defn around-or-jump [jump-fn [me v]]
   (into []
         (concat
          (map (partial move me) (range 1 5))
-         (if (not= \. v) (jump v me) []))))
+         (if (not= \. v)
+           (jump-fn me (jump v (take 2 me)))
+           []))))
 
-(defn found? [what where]
-  (->> where
-       (filter (comp (partial = what) second))
-       (first)))
-
-(defn reconstruct-path [grid dist me]
+(defn reconstruct-path [grid dist me jump-fn]
   (loop [dist (dec dist)
          me me
          acc (transient [])]
@@ -91,28 +90,34 @@
 
       (let [m (first (filter
                       (fn [pos] (= dist (grid pos)))
-                      (around-or-jump [me (level-with-portals me)])))]
+                      (around-or-jump jump-fn [me (level-with-portals (take 2 me))])))]
         (recur (dec dist) m (conj! acc m))))))
 
-(def start (first (portals "AA")))
-(def end (first (portals "ZZ")))
+(def start (conj (first (portals "AA")) 0))
+(def end (conj (first (portals "ZZ")) 0))
+
+(def cx (quot width 2))
+(def cy (quot height 2))
+
+(defn dist-to-center [[x y]]
+  (+ (Math/pow (- cx x) 2) (Math/pow (- cy y) 2)))
 
 (def init-state
   {:edge {start "AA"}
    :paths {start 0}
    :i 1})
 
-(defn next-frame [{:keys [edge paths i fin] :as quil-state}]
+(defn next-frame [{:keys [edge paths i fin jump-fn] :as quil-state}]
   (if (or fin (empty? edge) (edge end))
     (if fin quil-state
-        (assoc quil-state :fin (reconstruct-path paths (dec i) end)))
+        (assoc quil-state :fin (reconstruct-path paths (dec i) end jump-fn)))
 
     (let [around-edge
           (->> edge
-               (map around-or-jump)
+               (map (partial around-or-jump jump-fn))
                (apply concat)
                (filter (complement paths))
-               (map #(vector % (level-with-portals %)))
+               (map #(vector % (level-with-portals (take 2 %))))
                (filter (comp identity last))
                (into {}))]
       
@@ -125,8 +130,6 @@
 (defn draw [{:keys [paths edge i fin] :as quil-state}]
   (q/background 255)
   (q/rect-mode :center)
-
-  ;(println quil-state)
 
   (run! (fn [[[x y] v]]
           (if (= \. v)
@@ -160,8 +163,7 @@
 (defn start-sketch [from]
   (q/defsketch maze
     :title "maze"
-    :size [(* 5 (apply max-key identity (map count data)))
-           (+ 20 (* 5 (count data)))]
+    :size [(* 5 width) (+ 20 (* 5 height))]
     :setup (fn []
              (q/frame-rate 100)
              (q/fill 0)
@@ -171,10 +173,26 @@
     :middleware [m/fun-mode]
     :draw draw))
 
-(def end-state 
-  (->> init-state
+(defn solution [jump-fn]
+  (->> (assoc init-state :jump-fn jump-fn)
        (iterate next-frame)
        (drop-while (complement :fin))
-       (first)))
+       (first)
+       (:i)
+       (dec)))
 
-;(start-sketch end-state)
+(defn part1-jump [[_ _ l] to]
+  (if to [(conj to l)] []))
+
+(defn part2-jump [[_ _ l :as from] to]
+  (if-not to
+    []
+    (let [new-l (if (> (dist-to-center from) (dist-to-center to))
+                  (dec l) (inc l))]
+      
+      (if (neg? new-l)
+        []
+        [(conj to new-l)]))))
+
+(solution part1-jump)
+(solution part2-jump)

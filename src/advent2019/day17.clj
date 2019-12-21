@@ -78,7 +78,7 @@
 ;; single output instruction.
 
 (defn prg-to-input [& s-seq]
-  (into [] (map int (s/join "\n" s-seq))))
+  (into [] (map int (s/join "\n" (concat s-seq [""])))))
 
 (defn find-way [level-map]
   (let [max-pos (dec (count level-map))
@@ -149,7 +149,7 @@
    "R,12,L,6,R,12"
    "L,8,L,6,L,10"
    "R,12,L,10,L,6,R,10"
-   (if video-feed "y\n" "n\n")))
+   (if video-feed "y" "n")))
 
 (def video nil)
 (def init-state

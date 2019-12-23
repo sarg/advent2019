@@ -20,7 +20,7 @@
 
       (if (or (get #{'halt 'waiting-input} (:state state))
               (when until (until new-out)))
-        [code state (persistent! new-out)]
+        [code (assoc state :output nil) (persistent! new-out)]
         (let [[new-code new-state] (intcode-run code (assoc state :output nil))]
           (recur new-out new-code new-state))))))
 

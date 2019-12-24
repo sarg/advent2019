@@ -1,11 +1,6 @@
 (ns advent2019.day18
   (:require [clojure.java.io :as io]
-            [clojure.string :as string]
-            [flatland.ordered.set :refer [ordered-set]]
-            [clojure.pprint :as pp]
-            [clojure.set :as set]
-            [quil.core :as q]
-            [quil.middleware :as m]))
+            [flatland.ordered.set :refer [ordered-set]]))
 
 (def data
   (with-open [rdr (io/reader (io/resource "day18.in"))]
@@ -13,12 +8,6 @@
 
 ;; How many steps is the shortest path that collects all of the keys?
 ;; Key is lowercase letters, doors uppercase, me is @.
-
-(defn isKey [c]
-  (and (Character/isLetter c) (Character/isLowerCase c)))
-
-(defn isDoor [c]
-  (and (Character/isLetter c) (Character/isLowerCase c)))
 
 (defn row-to-entries [y row]
   (->> row
@@ -49,56 +38,66 @@
        (map (partial move me))))
 
 (defn find-nearest []
-  (let [level (assoc level me \.)]
-    (loop [edge [[me #{}]]
-           paths #{me}
-           all-keys []]
-      
-      (if (empty? edge) (map (fn [[pos deps]] [(level pos) deps]) all-keys)
+  (loop [edge [[me (ordered-set)]]
+         paths #{me}
+         all-keys []]
+    
+    (if (empty? edge)
+      (into [] (map (fn [[pos deps]] [(level pos) deps]) all-keys))
 
-          (let [{:keys [t-doors t-empty t-keys]}
-                (->> edge
-                     (map around)
-                     (apply concat)
-                     (filter (complement (comp paths first)))
-                     (group-by
-                      (fn [[pos deps]]
-                        (let [tile (level pos)]
-                          (cond
-                            (nil? tile) :walls
-                            (= \. tile) :t-empty
-                            (Character/isUpperCase tile) :t-doors
-                            (Character/isLowerCase tile) :t-keys)))))
-
-                next-edge (into [] (concat t-empty
-                                           (map (fn [[pos deps]] [pos (conj deps (level pos))]) t-keys)
-                                           (map (fn [[pos deps]]
-                                                  [pos (conj deps (Character/toLowerCase (level pos)))])
-                                                t-doors)))]
+      (let [{:keys [t-doors t-empty t-keys]}
+            (->> edge
+                 (map around)
+                 (apply concat)
+                 (into #{})
+                 (filter (comp nil? paths first))
+                 (group-by
+                  (fn [[pos deps]]
+                    (let [tile (level pos)]
+                      (cond
+                        (nil? tile) :walls
+                        (= \@ tile) :t-empty
+                        (= \. tile) :t-empty
+                        (Character/isUpperCase tile) :t-doors
+                        (Character/isLowerCase tile) :t-keys)))))
             
-            (recur next-edge
-                   (into paths (map first next-edge))
-                   (into all-keys t-keys)))))))
+            next-edge (into [] (concat t-empty
+                                       (map (fn [[pos deps]] [pos (conj deps (level pos))]) t-keys)
+                                       (map (fn [[pos deps]] [pos (conj deps (level pos))]) t-doors)))]
+        
+        (recur next-edge
+               (into paths (map first next-edge))
+               (into all-keys t-keys))))))
 
 (def deps (find-nearest))
 
-(defn choices [open]
+(defn filter-deps [d]
+  (let [last-key (first (filter #(Character/isLowerCase %) (reverse d)))]
+    (loop [t (ordered-set)
+           d d]
+
+      (if (empty? d) t
+          (let [c (first d)]
+            (recur (if (or (= c last-key)
+                           (Character/isUpperCase c))
+                     (conj t (Character/toLowerCase c))
+                     t)
+                   (rest d)))))))
+
+(def filtered-deps
+  (into {} (map (fn [[k v]] [k (filter-deps v)]) deps)))
+
+(defn choices [left deps]
   (->>
-   deps
-   (filter (fn [[k d]] (and (not (open k)) (every? open d))))
-   (map first)
+   left
+   (filter (fn [k] (not-any? left (deps k))))
    (into [])))
 
-;; doesn't make sense to go for key \a if B is closed
-;; ..@...a...B..A
-
-(defn distance [a b]
+(defn distance [level a b]
   (loop [edge [a]
          paths #{a}
          dist 0]
     
-    ;; (if (= i 13)
-    ;;   (println [edge paths all-doors all-keys]))
     (if (paths b) dist
 
         (let [around-edge
@@ -112,53 +111,23 @@
                  (into paths around-edge)
                  (inc dist))))))
 
-(defn get-cost [a b]
+(defn get-cost [level a b]
   (let [ac (first (filter #(= a (second %)) level))
         bc (first (filter #(= b (second %)) level))]
 
-    (distance (first ac) (first bc))))
+    (distance level (first ac) (first bc))))
 
-(def get-cost-m (memoize get-cost))
+(def get-cost-m (memoize (partial get-cost level)))
 
-(defn all-traversals [open left cost min-cost]
-  (cond
-    (> cost min-cost) nil
-    (empty? left) [cost (apply str open)]
-    :else
-    (let [at (last open)]
-      (loop [c (sort-by (partial get-cost-m at) (choices open))
-             min-cost-in-loop min-cost
-             min-path []]
-        (if (empty? c)
-          (do
-            (when (< min-cost-in-loop min-cost) [min-cost-in-loop min-path]))
-          
-          (let [choice (first c)
-                [nmc nmp] (all-traversals (conj open choice) (disj left choice)
-                                          (+ cost (get-cost-m choice at)) min-cost-in-loop)
-                better? (< (or nmc Integer/MAX_VALUE) min-cost-in-loop)]
-            (when better? (println [nmc nmp]))
-            (recur (rest c) (if better? nmc min-cost-in-loop) (if better? nmp min-path))))))))
+(def all-traversals
+  (memoize
+   (fn [at left]
+     (if (empty? left) 0
+         (->> (choices left filtered-deps)
+              (map (fn [choice]
+                     (+ (get-cost-m choice at)
+                        (all-traversals choice (disj left choice)))))
+              (apply min))))))
 
-(do (println "---")
-    (all-traversals (ordered-set \@)
-                    (into #{} (map first deps))
-                    0 4172))
-
-(defn greedy-traverse []
-  (loop [open (ordered-set \@)
-         total 0]
-    (if (> (count open) (count deps))
-      [total open]
-
-      (let [at (last open)
-            c (first (sort-by (partial get-cost-m at) (choices open)))]
-        (recur (conj open c) (+ total (get-cost-m at c)))))))
-
-
-;; 4672 too high
-;; 4172 too high
-(println "---" )
-(run! println
-      (flatten (map (fn [[f t]] (map #(str f " -> " %)
-                                     (if (empty? t) ["me"] t))) deps)))
+(defn part1 []
+  (all-traversals \@ (into #{} (map first filtered-deps))))

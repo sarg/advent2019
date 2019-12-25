@@ -1,0 +1,22 @@
+digraph {
+rankdir=LR;
+
+hull_breach -> holodeck [label="north"];
+hull_breach -> observatory [label="south"];
+holodeck -> warp_drive_maintenance [label="east"];
+warp_drive_maintenance -> kitchen [label="north"];
+kitchen -> hallway [label="east"];
+kitchen -> sick_bay [label="north"];
+observatory -> navigation [label="east"];
+holodeck -> science_lab [label="west"];
+science_lab -> gift_wrapping_center [label="west"];
+science_lab -> crew_quarters [label="north"];
+crew_quarters -> engineering [label="east"];
+engineering -> corridor [label="east"];
+engineering -> arcade [label="south"];
+arcade -> security_checkpoint [label="west"];
+crew_quarters -> stables [label="west"];
+gift_wrapping_center -> passages [label="west"];
+passages -> storage [label="west"];
+
+}

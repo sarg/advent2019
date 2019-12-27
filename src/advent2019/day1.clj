@@ -27,7 +27,7 @@
   (with-open [rdr (io/reader (io/resource "day1.in"))]
     (doall (map #(Integer/parseInt %) (line-seq rdr)))))
 
-(reduce #'+ (map fuel-req data))
+(reduce + (map fuel-req data))
 
 ;; So, for each module mass, calculate its fuel and add it to the total. Then,
 ;; treat the fuel amount you just calculated as the input mass and repeat the
@@ -52,8 +52,7 @@
 ;; them all up at the end.)
 
 (defn fuel-req-recursive [mass]
-  (loop [total 0
-         mass mass]
+  (loop [total 0 mass mass]
     (let [fuel (fuel-req mass)]
       (if (<= fuel 0) total
           (recur (+ total fuel) fuel)))))
@@ -62,4 +61,4 @@
 (assert (= (fuel-req-recursive 1969) 966))
 (assert (= (fuel-req-recursive 100756) 50346))
 
-(reduce #'+ (map fuel-req-recursive data))
+(reduce + (map fuel-req-recursive data))

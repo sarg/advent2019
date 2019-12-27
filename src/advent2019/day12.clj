@@ -58,7 +58,7 @@
    (+ c vc)
    (+ d vd)])
 
-(defn abs+ [[a b c]]
+(defn abs+ [a b c]
   (+ (Math/abs a) (Math/abs b) (Math/abs c)))
 
 (defn next-state [[mx my mz vx vy vz]]
@@ -82,16 +82,10 @@
         (nth (iterate next-state (init-state moons)) n)
 
         pot-energy
-        (->>
-         (interleave mx my mz)
-         (partition 3)
-         (map abs+))
-
+        (map abs+ mx my mz)
+        
         kin-energy
-        (->>
-         (interleave vx vy vz)
-         (partition 3)
-         (map abs+))
+        (map abs+ vx vy vz)
 
         total-energy
         (reduce + (map * pot-energy kin-energy))]

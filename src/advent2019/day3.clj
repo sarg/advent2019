@@ -26,10 +26,6 @@
 (assert (= (dir-to-delta "U83") [0 83]))
 (assert (= (dir-to-delta "L72") [-72 0]))
 
-(defn seg-order [seg]
-  "Sort points in SEG by x"
-  (into [] (sort seg)))
-
 (defn line-segments [dir-seq]
   "Transform DIR-SEQ to SEG-SEQ"
   (loop [acc (transient [])
@@ -51,8 +47,6 @@
                step
                new-x new-y
                (drop 1 dir-seq))))))
-
-(defn adjust-step [x y11 s1 l1])
 
 (defn valid-solution? [v]
   (and v (not (apply = 0 (first v)))))

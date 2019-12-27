@@ -26,8 +26,8 @@
 ;; carrying, use the command inv (for "inventory").
 
 (defn cmd-to-input [c] (into [] (map int c)))
-(defn print-out [r]
-  (println (apply str (map char (last r)))) r)
+(defn to-ascii [r] (apply str (map char (last r))))
+(defn print-out [r] (println (to-ascii r)) r)
 
 (defn step [[code state] & cmd]
   (collect-output code (assoc state :input (cmd-to-input (string/join "\n" (concat cmd [""]))))))
@@ -251,3 +251,32 @@
         (if-not (string/includes? txt "Alert!")
           (println txt))
         (recur (rest c))))))
+
+(defn parse-output [s]
+  (let [lines
+        (string/split-lines s)
+
+        lines
+        (drop-while #(not (.startsWith % "==")) lines)
+
+        room (first lines)
+
+        [desc lines]
+        (split-with #(not (.startsWith % "Doors")) (rest lines))
+
+        [doors lines]
+        (split-with #(.startsWith % "-") (rest lines))]
+    {:room room
+     :desc (string/join "\n" desc)
+     :doors (into [] (map #(subs % 2) doors))}))
+
+(defn auto-solution [data]
+  (loop [rooms {}]
+    (let [[code state out]
+          (collect-output (code-to-map data) {})
+
+          room (parse-output out)])))
+
+(println
+ (parse-output
+  (to-ascii hull-breach)))
